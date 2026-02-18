@@ -1,0 +1,13 @@
+apiVersion: 1
+
+datasources:
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    user: user
+    password: password
+    database: observability
+    jsonData:
+      sslmode: "disable"
+      postgresVersion: 1500

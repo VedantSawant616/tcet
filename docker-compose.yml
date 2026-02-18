@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # 1. API Service (FastAPI)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: observability_api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=observability
+      - POSTGRES_HOST=postgres
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - observability_net
+
+  # 2. Worker Service (Python Background Worker)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: observability_worker
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=observability
+      - POSTGRES_HOST=postgres
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - observability_net
+
+  # 3. Redis (Message Broker)
+  redis:
+    image: "redis:alpine"
+    container_name: observability_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - observability_net
+
+  # 4. PostgreSQL (Unified Storage)
+  postgres:
+    image: "postgres:15-alpine"
+    container_name: observability_postgres
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=observability
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - observability_net
+
+  # 5. Grafana (Visualization)
+  grafana:
+    image: "grafana/grafana:latest"
+    container_name: observability_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./dashboard/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - postgres
+    networks:
+      - observability_net
+
+  # 6. Frontend (Next.js Dashboard)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: observability_ui
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    networks:
+      - observability_net
+
+networks:
+  observability_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  grafana_data:
